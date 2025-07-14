@@ -14,7 +14,7 @@ by WireViz. Each wire results in two simple connectors and one cable connecting
 them.
 """
 
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Set
 
 import json
 import re
@@ -93,7 +93,7 @@ def generate_yaml(records: Iterable[Dict[str, str]]) -> str:
         YAML string ready to be consumed by :func:`wireviz.parse`.
     """
 
-    connectors: Dict[str, Dict] = {}
+    connectors: Dict[str, Set[str]] = {}
     cables: Dict[str, Dict] = {}
     connections: List[List[Dict[str, int]]] = []
 
@@ -121,14 +121,16 @@ def generate_yaml(records: Iterable[Dict[str, str]]) -> str:
 
         spec = _parse_wire_spec(row.get("item_descrip2", ""))
 
-        for conn in (left_conn, right_conn):
-            if conn:
-                connectors.setdefault(conn, {"style": "simple"})
+        for conn, pin in ((left_conn, left_pin), (right_conn, right_pin)):
+            if not conn:
+                continue
+            pins = connectors.setdefault(conn, set())
+            pins.add(pin or "1")
 
         cables[wire_name] = {
             "wirecount": 1,
             "colors": [spec["color"]],
-            "gauge": spec["gauge"],
+            "gauge": int(spec["gauge"]),
             "length": f"{row.get('bomitem_qtyper')} {row.get('uom_name')}",
         }
 
@@ -138,8 +140,12 @@ def generate_yaml(records: Iterable[Dict[str, str]]) -> str:
             {right_conn: right_pin or 1},
         ])
 
+    connector_entries = {
+        name: {"pins": sorted(pins, key=str)} for name, pins in connectors.items()
+    }
+
     data = {
-        "connectors": connectors,
+        "connectors": connector_entries,
         "cables": cables,
         "connections": connections,
     }
