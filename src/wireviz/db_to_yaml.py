@@ -105,13 +105,25 @@ def generate_yaml(records: Iterable[Dict[str, str]]) -> str:
         if len(sides) != 2:
             # notes may not contain two sides; skip this row
             continue
-        left, right = (_sanitize_designator(s) for s in sides)
+        left_raw, right_raw = sides
+        left_san = _sanitize_designator(left_raw)
+        right_san = _sanitize_designator(right_raw)
 
-        wire_name = (row.get("bomitem_ref") or f"W{idx}").strip()
+        # Extract connector names and pin numbers
+        left_conn, left_pin = left_san.split(".", 1) if "." in left_san else (left_san, "")
+        right_conn, right_pin = right_san.split(".", 1) if "." in right_san else (right_san, "")
+
+        # prefix numeric references to avoid clashes with connector pins
+        ref = (row.get("bomitem_ref") or f"W{idx}").strip()
+        if ref and ref[0].isdigit() and not ref.startswith("W"):
+            ref = f"W{ref}"
+        wire_name = _sanitize_designator(ref)
+
         spec = _parse_wire_spec(row.get("item_descrip2", ""))
 
-        for conn in (left, right):
-            connectors.setdefault(_base_designator(conn), {"style": "simple"})
+        for conn in (left_conn, right_conn):
+            if conn:
+                connectors.setdefault(conn, {"style": "simple"})
 
         cables[wire_name] = {
             "wirecount": 1,
@@ -120,7 +132,11 @@ def generate_yaml(records: Iterable[Dict[str, str]]) -> str:
             "length": f"{row.get('bomitem_qtyper')} {row.get('uom_name')}",
         }
 
-        connections.append([{left: 1}, {wire_name: 1}, {right: 1}])
+        connections.append([
+            {left_conn: left_pin or 1},
+            {wire_name: 1},
+            {right_conn: right_pin or 1},
+        ])
 
     data = {
         "connectors": connectors,
