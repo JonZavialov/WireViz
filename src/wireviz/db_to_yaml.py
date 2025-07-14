@@ -113,6 +113,11 @@ def generate_yaml(records: Iterable[Dict[str, str]]) -> str:
         left_conn, left_pin = left_san.split(".", 1) if "." in left_san else (left_san, "")
         right_conn, right_pin = right_san.split(".", 1) if "." in right_san else (right_san, "")
 
+        def normalize_pin(pin: str):
+            if not pin:
+                return 1
+            return int(pin) if pin.isdigit() else pin
+
         # prefix numeric references to avoid clashes with connector pins
         ref = (row.get("bomitem_ref") or f"W{idx}").strip()
         if ref and ref[0].isdigit() and not ref.startswith("W"):
@@ -121,11 +126,14 @@ def generate_yaml(records: Iterable[Dict[str, str]]) -> str:
 
         spec = _parse_wire_spec(row.get("item_descrip2", ""))
 
-        for conn, pin in ((left_conn, left_pin), (right_conn, right_pin)):
+        left_pin_norm = normalize_pin(left_pin)
+        right_pin_norm = normalize_pin(right_pin)
+
+        for conn, pin in ((left_conn, left_pin_norm), (right_conn, right_pin_norm)):
             if not conn:
                 continue
             pins = connectors.setdefault(conn, set())
-            pins.add(pin or "1")
+            pins.add(pin)
 
         cables[wire_name] = {
             "wirecount": 1,
@@ -135,9 +143,9 @@ def generate_yaml(records: Iterable[Dict[str, str]]) -> str:
         }
 
         connections.append([
-            {left_conn: left_pin or 1},
+            {left_conn: left_pin_norm},
             {wire_name: 1},
-            {right_conn: right_pin or 1},
+            {right_conn: right_pin_norm},
         ])
 
     connector_entries = {
