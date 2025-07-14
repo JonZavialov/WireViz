@@ -16,27 +16,32 @@ them.
 
 from typing import Dict, Iterable, List
 
-import yaml
+import json
+import re
 
 
 def _sanitize_designator(name: str) -> str:
     """Return a designator usable by WireViz.
 
-    WireViz designators may only contain a single separator character (``.``).
-    Some database entries include additional ``.`` characters which confuse the
-    parser.  All but the first separator are therefore replaced with ``-``.
+    The WireViz parser is fairly strict about connector names. They should not
+    contain spaces or punctuation other than ``.`` and ``-``.  Additionally the
+    parser only recognises one ``.`` separator.  Any additional separators are
+    therefore replaced with ``-`` and all other invalid characters are turned
+    into underscores.
     """
 
     if not name:
-        return name
+        return ""
 
     name = name.strip()
-    if name.count(".") <= 1:
-        return name
 
-    head, tail = name.split(".", 1)
-    tail = tail.replace(".", "-")
-    return f"{head}.{tail}"
+    if name.count(".") > 1:
+        head, tail = name.split(".", 1)
+        tail = tail.replace(".", "-")
+        name = f"{head}.{tail}"
+
+    name = re.sub(r"[^A-Za-z0-9_.-]", "_", name)
+    return name
 
 
 def _parse_wire_spec(spec: str) -> Dict[str, str]:
@@ -110,7 +115,9 @@ def generate_yaml(records: Iterable[Dict[str, str]]) -> str:
         "cables": cables,
         "connections": connections,
     }
-    return yaml.safe_dump(data, sort_keys=False)
+
+    # ``json.dumps`` produces valid YAML since JSON is a subset of YAML.
+    return json.dumps(data, indent=2)
 
 
 __all__ = ["generate_yaml"]
