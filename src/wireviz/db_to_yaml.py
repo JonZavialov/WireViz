@@ -44,6 +44,18 @@ def _sanitize_designator(name: str) -> str:
     return name
 
 
+def _base_designator(designator: str) -> str:
+    """Return the connector portion of a designator.
+
+    WireViz expects connectors to be defined without the pin suffix.
+    For example, ``X1.2`` references pin ``2`` on connector ``X1``.
+    This helper extracts the ``X1`` part from ``X1.2``.  If no
+    separator is present the input is returned unchanged.
+    """
+
+    return designator.split(".", 1)[0]
+
+
 def _parse_wire_spec(spec: str) -> Dict[str, str]:
     """Parse the encoded wire specification string.
 
@@ -99,7 +111,7 @@ def generate_yaml(records: Iterable[Dict[str, str]]) -> str:
         spec = _parse_wire_spec(row.get("item_descrip2", ""))
 
         for conn in (left, right):
-            connectors.setdefault(conn, {"style": "simple"})
+            connectors.setdefault(_base_designator(conn), {"style": "simple"})
 
         cables[wire_name] = {
             "wirecount": 1,
