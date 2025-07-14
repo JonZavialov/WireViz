@@ -8,13 +8,35 @@ one row returned from the database.
 
 Only rows with ``classcode_code`` equal to ``"WIRE, INSULATED"`` are
 interpreted as wires. The ``bomitem_notes`` field is assumed to contain the two
-connector identifiers separated by ``--``. Each wire results in two simple
-connectors and one cable connecting them.
+connector identifiers separated by ``--``. Designators are sanitized so that
+each uses at most one ``.`` character because that is the separator understood
+by WireViz. Each wire results in two simple connectors and one cable connecting
+them.
 """
 
 from typing import Dict, Iterable, List
 
 import yaml
+
+
+def _sanitize_designator(name: str) -> str:
+    """Return a designator usable by WireViz.
+
+    WireViz designators may only contain a single separator character (``.``).
+    Some database entries include additional ``.`` characters which confuse the
+    parser.  All but the first separator are therefore replaced with ``-``.
+    """
+
+    if not name:
+        return name
+
+    name = name.strip()
+    if name.count(".") <= 1:
+        return name
+
+    head, tail = name.split(".", 1)
+    tail = tail.replace(".", "-")
+    return f"{head}.{tail}"
 
 
 def _parse_wire_spec(spec: str) -> Dict[str, str]:
@@ -62,12 +84,13 @@ def generate_yaml(records: Iterable[Dict[str, str]]) -> str:
         if row.get("classcode_code") != "WIRE, INSULATED":
             continue
         notes = row.get("bomitem_notes", "")
-        try:
-            left, right = [n for n in notes.split("--") if n]
-        except ValueError:
+        sides = [n.strip() for n in notes.split("--") if n.strip()]
+        if len(sides) != 2:
             # notes may not contain two sides; skip this row
             continue
-        wire_name = row.get("bomitem_ref") or f"W{idx}"
+        left, right = (_sanitize_designator(s) for s in sides)
+
+        wire_name = (row.get("bomitem_ref") or f"W{idx}").strip()
         spec = _parse_wire_spec(row.get("item_descrip2", ""))
 
         for conn in (left, right):
@@ -87,7 +110,7 @@ def generate_yaml(records: Iterable[Dict[str, str]]) -> str:
         "cables": cables,
         "connections": connections,
     }
-    return yaml.dump(data, sort_keys=False)
+    return yaml.safe_dump(data, sort_keys=False)
 
 
 __all__ = ["generate_yaml"]
